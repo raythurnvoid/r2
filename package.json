@@ -41,32 +41,36 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/client/index.d.ts",
-      "default": "./dist/client/index.js"
+      "types": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
     },
     "./react": {
-      "types": "./dist/react/index.d.ts",
-      "default": "./dist/react/index.js"
+      "types": "./src/react/index.ts",
+      "default": "./src/react/index.ts"
     },
     "./svelte": {
-      "types": "./dist/svelte/index.d.ts",
-      "default": "./dist/svelte/index.js"
+      "types": "./src/svelte/index.ts",
+      "default": "./src/svelte/index.ts"
     },
     "./vue": {
-      "types": "./dist/vue/index.d.ts",
-      "default": "./dist/vue/index.js"
+      "types": "./src/vue/index.ts",
+      "default": "./src/vue/index.ts"
     },
-    "./test": "./src/test.ts",
+    "./test": {
+      "types": "./src/test.ts",
+      "default": "./src/test.ts"
+    },
     "./_generated/component.js": {
-      "types": "./dist/component/_generated/component.d.ts"
+      "types": "./src/component/_generated/component.ts",
+      "default": "./src/component/_generated/component.ts"
     },
     "./convex.config": {
-      "types": "./dist/component/convex.config.d.ts",
-      "default": "./dist/component/convex.config.js"
+      "types": "./src/component/convex.config.ts",
+      "default": "./src/component/convex.config.ts"
     },
     "./convex.config.js": {
-      "types": "./dist/component/convex.config.d.ts",
-      "default": "./dist/component/convex.config.js"
+      "types": "./src/component/convex.config.ts",
+      "default": "./src/component/convex.config.ts"
     }
   },
   "peerDependencies": {
@@ -145,8 +149,9 @@
     "vue": "3.5.32",
     "wrangler": "4.82.2"
   },
-  "types": "./dist/client/index.d.ts",
-  "module": "./dist/client/index.js",
+  "types": "./src/client/index.ts",
+  "module": "./src/client/index.ts",
+  "main": "./src/client/index.ts",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
     "@aws-sdk/s3-request-presigner": "^3.1030.0",

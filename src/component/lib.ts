@@ -22,7 +22,13 @@ import { ActionRetrier } from "@convex-dev/action-retrier";
 import type { R2Callbacks } from "../client/index.js";
 
 const DEFAULT_LIST_LIMIT = 100;
-const retrier = new ActionRetrier(components.actionRetrier);
+type ActionRetrierComponent = ConstructorParameters<typeof ActionRetrier>[0];
+
+// The component is registered in convex.config.ts. Keep the generated API file
+// untouched and derive the nested component type from ActionRetrier itself.
+const retrier = new ActionRetrier(
+  (components as { actionRetrier: ActionRetrierComponent }).actionRetrier,
+);
 
 const getUrl = async (r2: S3Client, bucket: string, key: string) => {
   return await getSignedUrl(

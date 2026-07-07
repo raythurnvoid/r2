@@ -15,6 +15,6 @@ export function register(
   name: string = "r2",
 ) {
   t.registerComponent(name, schema, modules);
-  actionRetrier.register(t);
+  actionRetrier.register(t, `${name}/actionRetrier`);
 }
 export default { register, schema, modules };

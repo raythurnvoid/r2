@@ -80,9 +80,11 @@ export type ClientApi = ApiFromModules<{
   client: ReturnType<R2["clientApi"]>;
 }>["client"];
 
-type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+// Pick from the action ctx: in convex 1.42 the query/mutation ctx variants
+// gained an options param, so only the action signatures fit every ctx kind.
+type QueryCtx = Pick<GenericActionCtx<GenericDataModel>, "runQuery">;
 type MutationCtx = Pick<
-  GenericMutationCtx<GenericDataModel>,
+  GenericActionCtx<GenericDataModel>,
   "runQuery" | "runMutation"
 >;
 type ActionCtx = Pick<

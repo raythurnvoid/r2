@@ -175,13 +175,29 @@ export class R2 {
    * @param key - The R2 object key.
    * @param options - Optional config object.
    *   - `expiresIn` - The number of seconds until the URL expires (default: 900, max: 604800 for 7 days).
+   *   - `responseContentType` - Overrides the Content-Type header of the response.
+   *   - `responseContentDisposition` - Overrides the Content-Disposition header of the response.
    * @returns A promise that resolves to a signed URL for the object.
    */
-  async getUrl(key: string, options: { expiresIn?: number } = {}) {
+  async getUrl(
+    key: string,
+    options: {
+      expiresIn?: number;
+      responseContentType?: string;
+      responseContentDisposition?: string;
+    } = {},
+  ) {
     const { expiresIn = 900 } = options;
+    // The response header overrides must be part of the signed command. Appending
+    // response-content-* query params to an already-signed URL breaks the SigV4 signature.
     return await getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        ResponseContentType: options.responseContentType,
+        ResponseContentDisposition: options.responseContentDisposition,
+      }),
       { expiresIn },
     );
   }

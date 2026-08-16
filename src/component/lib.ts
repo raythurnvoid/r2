@@ -265,8 +265,8 @@ export const copyR2Object = action({
     // loses its Content-Length and downgrades the ETag to a weak `W/"..."` form, so only
     // a KNOWN different length counts as a change; the etag comparison still pins the
     // exact content either way.
-    const sourceEtagStrong =
-      source.ETag === undefined ? undefined : `"${normalizeEtag(source.ETag)}"`;
+    const sourceEtag = source.ETag === undefined ? undefined : normalizeEtag(source.ETag);
+    const sourceEtagStrong = sourceEtag === undefined ? undefined : `"${sourceEtag}"`;
     if (
       (expectedSize !== undefined &&
         source.ContentLength !== undefined &&
@@ -326,10 +326,12 @@ export const copyR2Object = action({
       );
     }
 
+    // Return the bare normalized etag. Cloudflare's event payloads carry the same bare form,
+    // so every publish path stores one consistent shape.
     return {
       outcome: "copied" as const,
       size: source.ContentLength,
-      etag: sourceEtagStrong,
+      etag: sourceEtag,
     };
   },
 });

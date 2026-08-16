@@ -2,6 +2,7 @@ import { action, mutation, query } from "./_generated/server.js";
 import { v } from "convex/values";
 import schema from "./schema.js";
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -214,6 +215,91 @@ export const deleteMetadata = mutation({
     if (metadata) {
       await ctx.db.delete("metadata", metadata._id);
     }
+  },
+});
+
+const httpStatusCode = (error: unknown) =>
+  (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+    ?.httpStatusCode;
+
+const normalizeEtag = (etag: string) =>
+  etag.replace(/^W\//, "").replace(/^"|"$/g, "");
+
+// Copy an object to another key on the server side. Streaming a GET body into a
+// signed PUT sends it chunked without Content-Length, and R2 refuses that with
+// 411, so large objects can only move with a CopyObject request.
+export const copyR2Object = action({
+  args: {
+    sourceKey: v.string(),
+    destinationKey: v.string(),
+    expectedSize: v.optional(v.number()),
+    expectedEtag: v.optional(v.string()),
+    ...r2ConfigValidator.fields,
+  },
+  returns: v.union(
+    v.object({
+      outcome: v.literal("copied"),
+      size: v.optional(v.number()),
+      etag: v.optional(v.string()),
+    }),
+    v.object({ outcome: v.literal("source_missing") }),
+    v.object({ outcome: v.literal("source_changed") }),
+  ),
+  handler: async (_ctx, args) => {
+    const { sourceKey, destinationKey, expectedSize, expectedEtag, ...r2Config } =
+      args;
+    const r2 = createR2Client(r2Config);
+
+    let source;
+    try {
+      source = await r2.send(
+        new HeadObjectCommand({ Bucket: r2Config.bucket, Key: sourceKey }),
+      );
+    } catch (error) {
+      if (httpStatusCode(error) === 404) {
+        return { outcome: "source_missing" as const };
+      }
+      throw error;
+    }
+    if (
+      (expectedSize !== undefined && source.ContentLength !== expectedSize) ||
+      (expectedEtag !== undefined &&
+        (source.ETag === undefined ||
+          normalizeEtag(source.ETag) !== normalizeEtag(expectedEtag)))
+    ) {
+      return { outcome: "source_changed" as const };
+    }
+
+    try {
+      await r2.send(
+        new CopyObjectCommand({
+          Bucket: r2Config.bucket,
+          Key: destinationKey,
+          CopySource: `${r2Config.bucket}/${sourceKey
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/")}`,
+          // Copy exactly the object the head above described; R2 answers 412
+          // when it changed in between.
+          CopySourceIfMatch: source.ETag,
+        }),
+      );
+    } catch (error) {
+      const status = httpStatusCode(error);
+      if (status === 404) {
+        return { outcome: "source_missing" as const };
+      }
+      if (status === 412) {
+        return { outcome: "source_changed" as const };
+      }
+      throw error;
+    }
+
+    return {
+      outcome: "copied" as const,
+      size: source.ContentLength,
+      etag: source.ETag,
+    };
   },
 });
 

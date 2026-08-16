@@ -24,6 +24,24 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     lib: {
+      copyR2Object: FunctionReference<
+        "action",
+        "internal",
+        {
+          accessKeyId: string;
+          bucket: string;
+          destinationKey: string;
+          endpoint: string;
+          expectedEtag?: string;
+          expectedSize?: number;
+          secretAccessKey: string;
+          sourceKey: string;
+        },
+        | { etag?: string; outcome: "copied"; size?: number }
+        | { outcome: "source_missing" }
+        | { outcome: "source_changed" },
+        Name
+      >;
       deleteMetadata: FunctionReference<
         "mutation",
         "internal",

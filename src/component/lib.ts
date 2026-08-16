@@ -261,8 +261,16 @@ export const copyR2Object = action({
       }
       throw error;
     }
+    // Cloudflare's edge compresses text responses on the fly. A compressed head answer
+    // loses its Content-Length and downgrades the ETag to a weak `W/"..."` form, so only
+    // a KNOWN different length counts as a change; the etag comparison still pins the
+    // exact content either way.
+    const sourceEtagStrong =
+      source.ETag === undefined ? undefined : `"${normalizeEtag(source.ETag)}"`;
     if (
-      (expectedSize !== undefined && source.ContentLength !== expectedSize) ||
+      (expectedSize !== undefined &&
+        source.ContentLength !== undefined &&
+        source.ContentLength !== expectedSize) ||
       (expectedEtag !== undefined &&
         (source.ETag === undefined ||
           normalizeEtag(source.ETag) !== normalizeEtag(expectedEtag)))
@@ -270,35 +278,58 @@ export const copyR2Object = action({
       return { outcome: "source_changed" as const };
     }
 
-    try {
-      await r2.send(
-        new CopyObjectCommand({
-          Bucket: r2Config.bucket,
-          Key: destinationKey,
-          CopySource: `${r2Config.bucket}/${sourceKey
-            .split("/")
-            .map(encodeURIComponent)
-            .join("/")}`,
-          // Copy exactly the object the head above described; R2 answers 412
-          // when it changed in between.
-          CopySourceIfMatch: source.ETag,
-        }),
+    // The SDK cannot read CopyObject's XML response in the Convex runtime: its
+    // browser XML parser needs the DOMParser global, which Convex does not
+    // provide, so `r2.send(new CopyObjectCommand(...))` throws after the copy
+    // already ran. Sign the request with the presigner instead and send it with
+    // fetch, deciding the outcome from the status code alone.
+    const copySource = `${r2Config.bucket}/${sourceKey
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+    const copyHeaders: Record<string, string> = {
+      "x-amz-copy-source": copySource,
+    };
+    // Copy exactly the object the head above described; R2 answers 412 when it
+    // changed in between. If-Match only accepts a strong etag, so send the strong
+    // form even when the compressed head answered with a weak one.
+    if (sourceEtagStrong !== undefined) {
+      copyHeaders["x-amz-copy-source-if-match"] = sourceEtagStrong;
+    }
+    const copyUrl = await getSignedUrl(
+      r2,
+      new CopyObjectCommand({
+        Bucket: r2Config.bucket,
+        Key: destinationKey,
+        CopySource: copySource,
+        CopySourceIfMatch: sourceEtagStrong,
+      }),
+      // Keep the copy headers out of the query string so they stay signed
+      // headers; R2 only honors the copy directive as a header.
+      { unhoistableHeaders: new Set(Object.keys(copyHeaders)) },
+    );
+    const copyResponse = await fetch(copyUrl, {
+      method: "PUT",
+      headers: copyHeaders,
+    });
+    if (copyResponse.status === 404) {
+      return { outcome: "source_missing" as const };
+    }
+    if (copyResponse.status === 412) {
+      return { outcome: "source_changed" as const };
+    }
+    const copyBody = await copyResponse.text();
+    // S3-compatible stores may answer 200 with an <Error> body for CopyObject.
+    if (!copyResponse.ok || copyBody.includes("<Error")) {
+      throw new Error(
+        `CopyObject failed with status ${copyResponse.status}: ${copyBody.slice(0, 500)}`,
       );
-    } catch (error) {
-      const status = httpStatusCode(error);
-      if (status === 404) {
-        return { outcome: "source_missing" as const };
-      }
-      if (status === 412) {
-        return { outcome: "source_changed" as const };
-      }
-      throw error;
     }
 
     return {
       outcome: "copied" as const,
       size: source.ContentLength,
-      etag: source.ETag,
+      etag: sourceEtagStrong,
     };
   },
 });

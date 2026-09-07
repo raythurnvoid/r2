@@ -205,15 +205,29 @@ export class R2 {
    * Generate a signed URL for uploading an object to R2.
    *
    * @param customKey (optional) - A custom R2 object key to use. Must be unique.
+   * @param options (optional) - URL lifetime in seconds and create-only signing.
+   *   Create-only callers must send the `If-None-Match: *` header with their PUT.
    * @returns A promise that resolves to an object with the following fields:
    *   - `key` - The R2 object key.
    *   - `url` - A signed URL for uploading the object.
    */
-  async generateUploadUrl(customKey?: string) {
+  async generateUploadUrl(
+    customKey?: string,
+    options: { expiresIn?: number; createOnly?: boolean } = {},
+  ) {
     const key = customKey || crypto.randomUUID();
     const url = await getSignedUrl(
       this.client,
-      new PutObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      new PutObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        IfNoneMatch: options.createOnly ? "*" : undefined,
+      }),
+      {
+        expiresIn: options.expiresIn ?? 900,
+        // The caller cannot remove the write condition from a signed request.
+        signableHeaders: options.createOnly ? new Set(["if-none-match"]) : undefined,
+      },
     );
     return { key, url };
   }
